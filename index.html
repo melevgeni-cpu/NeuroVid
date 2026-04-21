@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>NeuroVid · Оживление памяти и AI-кинематограф</title>
+  <!-- Tailwind CSS (lightweight utility layer) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- GSAP & Plugins -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollToPlugin.min.js"></script>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* ===== CUSTOM DESIGN TOKENS (NO MAGIC NUMBERS) ===== */
+    :root {
+      --bg-tech: #0A0A0F;
+      --bg-memory: #F5F0EB;
+      --accent-warm: #D4A373;
+      --accent-business: #457B9D;
+      --accent-creator: #E63946;
+      --neutral-soft: #1A1A2E;
+      --noise-opacity: 0.03;
+      --header-height: 72px;
+      --transition-default: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background-color: var(--bg-tech);
+      color: #F5F0EB;
+      margin: 0;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Эмульсионный шум (только для секций family/memory vibe) */
+    .noise-overlay {
+      position: relative;
+    }
+    .noise-overlay::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJmIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc0IiBudW1PY3RhdmVzPSIzIiAvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNmKSIgb3BhY2l0eT0iMC4wNSIgLz48L3N2Zz4=');
+      opacity: var(--noise-opacity);
+      z-index: 1;
+      mix-blend-mode: overlay;
+    }
+
+    /* Стики хедер */
+    .header-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      backdrop-filter: blur(12px);
+      background-color: rgba(10, 10, 15, 0.7);
+      transition: box-shadow 0.2s;
+    }
+    .header-sticky.scrolled {
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    }
+
+    /* Слайдер сравнения (до/после) */
+    .comparison-slider {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      border-radius: 24px;
+      box-shadow: 0 20px 35px -8px rgba(0,0,0,0.4);
+    }
+    .comparison-before {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #2a1e1a;
+      background-image: linear-gradient(145deg, #3d2c24, #1f1612);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #bc9a7c;
+    }
+    .comparison-after {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1e2a32;
+      background-image: linear-gradient(145deg, #2e3f4a, #17222b);
+      clip-path: inset(0 50% 0 0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #d4c9b8;
+    }
+    .slider-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 4px;
+      background: rgba(255,255,240,0.8);
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow: 0 0 12px rgba(0,0,0,0.5);
+      z-index: 5;
+    }
+    .slider-input {
+      position: absolute;
+      bottom: 16px;
+      left: 10%;
+      width: 80%;
+      z-index: 10;
+      cursor: grab;
+      accent-color: var(--accent-warm);
+    }
+
+    /* Кнопка "Орбита" */
+    .orbit-button {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 40px;
+      background: #2d2d3a;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      cursor: pointer;
+      z-index: 999;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s, visibility 0.25s, background-color 0.2s;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .orbit-button.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .orbit-button i {
+      font-size: 24px;
+    }
+    /* Мини-меню внутри орбиты (десктоп ховер) */
+    .orbit-menu {
+      position: absolute;
+      right: 70px;
+      bottom: 0;
+      display: flex;
+      gap: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(10px);
+      transition: all 0.2s ease;
+      pointer-events: none;
+    }
+    .orbit-button:hover .orbit-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+    .orbit-menu-item {
+      width: 44px;
+      height: 44px;
+      border-radius: 30px;
+      background: rgba(20,20,30,0.9);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: transform 0.15s;
+      cursor: pointer;
+    }
+    .orbit-menu-item:hover {
+      transform: scale(1.08);
+    }
+
+    /* модалки */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .modal.active {
+      display: flex;
+    }
+
+    /* reels сетка */
+    .reel-card video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 20px;
+    }
+
+    /* Анимации при скролле (будут активированы GSAP) */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+  </style>
+</head>
+<body class="text-gray-200">
+
+<!-- ==================== HEADER ==================== -->
+<header class="header-sticky py-3 px-5 md:px-8 flex items-center justify-between" id="mainHeader">
+  <div class="text-2xl font-bold tracking-tight bg-gradient-to-r from-amber-200 to-stone-300 bg-clip-text text-transparent">
+    Neuro<span class="text-white">Vid</span>
+  </div>
+  <nav class="hidden md:flex items-center gap-8 text-sm font-medium">
+    <a href="#family" class="hover:text-amber-300 transition">Семье</a>
+    <a href="#business" class="hover:text-blue-300 transition">Бизнесу</a>
+    <a href="#creators" class="hover:text-rose-400 transition">Блогерам</a>
+    <a href="#footer" class="hover:text-gray-300 transition">Контакты</a>
+  </nav>
+  <button id="contactBtn" class="bg-white/10 backdrop-blur-sm border border-white/20 px-5 py-2 rounded-full text-sm font-semibold hover:bg-white/20 transition flex items-center gap-2">
+    <i class="fas fa-paper-plane"></i> Связаться
+  </button>
+</header>
+
+<!-- ==================== HERO (3 КОЛОНКИ) ==================== -->
+<section class="max-w-7xl mx-auto px-5 py-12 md:py-20">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+    <!-- Колонка 1: Семья -->
+    <div class="rounded-3xl p-8 flex flex-col items-start justify-between min-h-[360px] transition-all duration-300 hover:scale-[1.01] shadow-2xl" style="background: linear-gradient(145deg, #F5F0EB 0%, #EADBC6 100%); color: #1e1a16;">
+      <div>
+        <div class="text-4xl mb-4"><i class="fas fa-heart" style="color: #D4A373;"></i></div>
+        <h2 class="text-3xl font-bold mb-3 tracking-tight">Вернуть живой взгляд</h2>
+        <p class="text-base opacity-80 mb-8">Фото рассыпается? Мы восстановим его, чтобы мама снова улыбнулась.</p>
+      </div>
+      <button data-scroll-to="family" class="mt-auto bg-[#D4A373] text-gray-900 px-6 py-3 rounded-full font-semibold flex items-center gap-2 hover:bg-[#b88354] transition shadow-md">
+        <i class="fas fa-heart"></i> Оживить семейную реликвию
+      </button>
+    </div>
+    <!-- Колонка 2: Бизнес -->
+    <div class="rounded-3xl p-8 flex flex-col items-start justify-between min-h-[360px] transition-all duration-300 hover:scale-[1.01] shadow-2xl" style="background: linear-gradient(145deg, #E9F0F5 0%, #CDDEE9 100%); color: #0b1c26;">
+      <div>
+        <div class="text-4xl mb-4"><i class="fas fa-briefcase" style="color: #457B9D;"></i></div>
+        <h2 class="text-3xl font-bold mb-3 tracking-tight">Удивить команду</h2>
+        <p class="text-base opacity-80 mb-8">Сделайте корпоратив историческим. Оживим фото основателя для HR-бренда.</p>
+      </div>
+      <button data-scroll-to="business" class="mt-auto bg-[#457B9D] text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 hover:bg-[#366180] transition shadow-md">
+        <i class="fas fa-briefcase"></i> Узнать про B2B
+      </button>
+    </div>
+    <!-- Колонка 3: Креаторы -->
+    <div class="rounded-3xl p-8 flex flex-col items-start justify-between min-h-[360px] transition-all duration-300 hover:scale-[1.01] shadow-2xl" style="background: linear-gradient(145deg, #2A1B1D 0%, #1F1113 100%); color: #fadfe2;">
+      <div>
+        <div class="text-4xl mb-4"><i class="fas fa-bolt" style="color: #E63946;"></i></div>
+        <h2 class="text-3xl font-bold mb-3 tracking-tight">Взорвать охваты</h2>
+        <p class="text-base opacity-80 mb-8">Нейро-рилсы, которые алгоритмы пушат в топ. Готовый визуал за 24 часа.</p>
+      </div>
+      <button data-scroll-to="creators" class="mt-auto bg-[#E63946] text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 hover:bg-[#c52836] transition shadow-md">
+        <i class="fas fa-bolt"></i> Запустить нейро-продакшн
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== СЕКЦИЯ FAMILY ==================== -->
+<section id="family" class="noise-overlay py-20 px-5 md:px-8 relative" style="background: linear-gradient(120deg, #F5F0EB 0%, #E2D9CD 100%); color: #1f1a15;">
+  <div class="max-w-6xl mx-auto relative z-10">
+    <h2 class="text-4xl md:text-5xl font-bold mb-8">Спасите семейный архив от забвения. <br>Бережная нейро-реставрация с гарантией сходства.</h2>
+    
+    <!-- Интерактивный слайдер до/после -->
+    <div class="grid md:grid-cols-2 gap-10 items-center mt-12">
+      <div>
+        <div class="comparison-slider">
+          <div class="comparison-before flex flex-col items-center justify-center p-4 text-center">
+            <i class="fas fa-image text-5xl mb-3 opacity-70"></i>
+            <span class="font-medium">Порванное, выцветшее фото</span>
+            <span class="text-sm opacity-60 mt-2">(до обработки)</span>
+          </div>
+          <div class="comparison-after flex flex-col items-center justify-center p-4 text-center" id="afterImage">
+            <i class="fas fa-magic text-5xl mb-3"></i>
+            <span class="font-medium">Восстановлено + живая мимика</span>
+            <span class="text-sm opacity-80 mt-2">✨ улыбка глазами</span>
+          </div>
+          <div class="slider-handle"></div>
+          <input type="range" min="0" max="100" value="50" class="slider-input" id="comparisonRange" aria-label="Ползунок сравнения до и после">
+        </div>
+        <p class="text-xs text-center mt-3 opacity-70">↔️ Перетащите ползунок, чтобы увидеть разницу</p>
+      </div>
+      <div class="space-y-6">
+        <p class="text-lg leading-relaxed">Мы не пользуемся шаблонными приложениями. Вручную дорабатываем мимику, чтобы ваша бабушка осталась родной, а не превратилась в «куклу» из бесплатного приложения.</p>
+        
+        <!-- Таблица сравнения -->
+        <div class="bg-white/30 backdrop-blur-sm p-6 rounded-2xl">
+          <div class="flex justify-between items-center border-b border-black/10 pb-3 mb-3">
+            <span class="font-semibold">Бесплатные приложения</span>
+            <span class="font-bold text-[#D4A373]">NEUROVID</span>
+          </div>
+          <div class="flex justify-between"><span>Кривые артефакты</span> <i class="fas fa-times text-red-500"></i> <i class="fas fa-check text-green-600"></i></div>
+          <div class="flex justify-between mt-2"><span>Ручная постобработка</span> <i class="fas fa-times text-red-500"></i> <i class="fas fa-check text-green-600"></i></div>
+          <div class="flex justify-between mt-2"><span>100% сходство</span> <i class="fas fa-times text-red-500"></i> <i class="fas fa-check text-green-600"></i></div>
+        </div>
+        <button id="familyCta" class="bg-[#D4A373] text-gray-900 px-8 py-4 rounded-full text-lg font-bold shadow-lg hover:bg-[#b88354] transition flex items-center gap-3">
+          <i class="fas fa-cloud-upload-alt"></i> Бесплатно оценить сложность фото
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== СЕКЦИЯ BUSINESS ==================== -->
+<section id="business" class="py-20 px-5 md:px-8" style="background: linear-gradient(135deg, #1A2F3D 0%, #0D1C26 100%); color: #e6f0f7;">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <h2 class="text-4xl font-bold mb-6">AI-спецэффекты для HR и Event. Создаем WOW-контент без бюджета Голливуда.</h2>
+        <!-- Видео-тизер (loop muted) -->
+        <div class="rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+          <video autoplay loop muted playsinline preload="none" poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'%3E%3Crect width='800' height='450' fill='%232a3f4a'/%3E%3Ctext x='40' y='220' font-family='system-ui' font-size='24' fill='%23bdd3e0'%3EЗавод 70-х → цвет → подмигивание%3C/text%3E%3C/svg%3E" class="w-full h-auto">
+            <source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAQxtZGF0AAAAMgAAACh3cnRl" type="video/mp4">
+            Ваш браузер не поддерживает видео.
+          </video>
+        </div>
+      </div>
+      <div class="space-y-6">
+        <p class="text-xl">Кейс: Оживление основателя компании к 50-летию фирмы. Окупилось лояльностью команды и репостами во всех корп-чатах. Работаем по NDA.</p>
+        <button id="businessPresentationBtn" class="bg-[#457B9D] text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-[#366180] transition shadow-lg flex items-center gap-3">
+          <i class="fas fa-file-powerpoint"></i> Получить презентацию для руководства
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== СЕКЦИЯ CREATORS ==================== -->
+<section id="creators" class="py-20 px-5 md:px-8 relative" style="background: #0F0C0E;">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-4xl md:text-5xl font-bold mb-4" style="color: #f1d3d6;">Статичные посты мертвы. Превращаем исторические хроники в виральные Reels.</h2>
+    <p class="text-lg text-gray-300 mb-10 max-w-3xl">Вы получаете не просто генерацию, а нейро-продакшн под ключ: цветкор, музыка, удержание внимания с первой секунды.</p>
+    
+    <!-- Сетка из 3 reels -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="reel-card bg-black/40 rounded-2xl p-1 aspect-[9/16] relative group">
+        <video autoplay loop muted playsinline preload="none" class="w-full h-full object-cover rounded-xl" poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='356'%3E%3Crect width='200' height='356' fill='%232d1a1c'/%3E%3Ctext fill='%23E63946' x='20' y='180' font-size='14'%3EReel 1%3C/text%3E%3C/svg%3E">
+          <source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAQxtZGF0AAAAMgAAACh3cnRl" type="video/mp4">
+        </video>
+        <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent rounded-xl flex items-end p-3 opacity-0 group-hover:opacity-100 transition">
+          <span class="text-sm"><i class="fas fa-volume-up mr-1"></i> 1920-е → нейро</span>
+        </div>
+      </div>
+      <div class="reel-card bg-black/40 rounded-2xl p-1 aspect-[9/16] relative group">
+        <video autoplay loop muted playsinline preload="none" class="w-full h-full object-cover rounded-xl" poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='356'%3E%3Crect width='200' height='356' fill='%23252535'/%3E%3Ctext fill='%23aaccdd' x='20' y='180' font-size='14'%3EReel 2%3C/text%3E%3C/svg%3E">
+          <source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAQxtZGF0AAAAMgAAACh3cnRl" type="video/mp4">
+        </video>
+      </div>
+      <div class="reel-card bg-black/40 rounded-2xl p-1 aspect-[9/16] relative group">
+        <video autoplay loop muted playsinline preload="none" class="w-full h-full object-cover rounded-xl" poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='356'%3E%3Crect width='200' height='356' fill='%233d2b1a'/%3E%3Ctext fill='%23D4A373' x='20' y='180' font-size='14'%3EReel 3%3C/text%3E%3C/svg%3E">
+          <source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAQxtZGF0AAAAMgAAACh3cnRl" type="video/mp4">
+        </video>
+      </div>
+    </div>
+    <button class="mt-10 bg-[#E63946] text-white px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 hover:bg-[#c52836] transition" id="catalogDownload">
+      <i class="fas fa-download"></i> Скачать каталог виральных нейро-стилей (15+)
+    </button>
+  </div>
+</section>
+
+<!-- ==================== ПОЧЕМУ МЫ ==================== -->
+<section class="py-20 px-5 bg-[#0A0A0F]">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="text-3xl font-bold mb-12 text-center">Почему выбирают NeuroVid</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div class="p-6 rounded-2xl bg-white/5 border border-white/10"><i class="fas fa-paint-brush text-3xl mb-4 text-amber-300"></i><h3 class="text-xl font-semibold mb-2">Ручная постобработка</h3><p class="opacity-80">Не оставляем глитчей. Доводим до киношного качества.</p></div>
+      <div class="p-6 rounded-2xl bg-white/5 border border-white/10"><i class="fas fa-shield-alt text-3xl mb-4 text-blue-300"></i><h3 class="text-xl font-semibold mb-2">Безопасность и NDA</h3><p class="opacity-80">Фото на защищенных серверах. Договор о конфиденциальности.</p></div>
+      <div class="p-6 rounded-2xl bg-white/5 border border-white/10"><i class="fas fa-clock text-3xl mb-4 text-green-300"></i><h3 class="text-xl font-semibold mb-2">Скорость 24/7</h3><p class="opacity-80">Дедлайн горит? Сделаем за ночь с доплатой за срочность.</p></div>
+      <div class="p-6 rounded-2xl bg-white/5 border border-white/10"><i class="fab fa-tiktok text-3xl mb-4 text-rose-300"></i><h3 class="text-xl font-semibold mb-2">Попадание в тренды</h3><p class="opacity-80">Мы сами в TikTok, знаем, какой звук залетит завтра.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== КЕЙСЫ / БЛОГ ==================== -->
+<section class="py-16 px-5 bg-[#121218]">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid md:grid-cols-3 gap-8">
+      <div class="bg-[#1e1a16] p-6 rounded-3xl"><i class="fas fa-play-circle text-4xl text-[#D4A373] mb-4"></i><p class="italic text-lg">"Мама плакала 20 минут. Спасибо за папу живым".</p><span class="text-sm opacity-60 mt-3 block">— Семейный архив</span></div>
+      <div class="bg-[#16262e] p-6 rounded-3xl"><i class="fas fa-building text-4xl text-[#457B9D] mb-4"></i><p class="font-medium">«Самый обсуждаемый корпоратив 2026 года»</p><div class="mt-3 text-sm opacity-70">Оживление основателя · NDA</div></div>
+      <div class="bg-[#2d1a1c] p-6 rounded-3xl"><i class="fas fa-chart-line text-4xl text-[#E63946] mb-4"></i><p>+15к подписчиков с одного рилса. ROI x10</p><div class="mt-3 text-sm">@neuro_creator</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== ФУТЕР ==================== -->
+<footer id="footer" class="bg-[#1A1A2E] text-gray-300 pt-16 pb-8 px-5">
+  <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+    <div><div class="text-2xl font-bold text-white mb-3">NeuroVid</div><p class="text-sm opacity-70">Искусство оживлять воспоминания и алгоритмы.</p></div>
+    <div><h4 class="text-white font-semibold mb-3">Услуги</h4><ul class="space-y-2"><li><a href="#family" class="hover:text-amber-300">Семье</a></li><li><a href="#business" class="hover:text-blue-300">Бизнесу</a></li><li><a href="#creators" class="hover:text-rose-300">Блогерам</a></li></ul></div>
+    <div><h4 class="text-white font-semibold mb-3">Мессенджеры</h4><div class="flex gap-4 text-2xl"><a href="#" class="hover:text-[#D4A373]"><i class="fab fa-telegram"></i></a><a href="#" class="hover:text-[#D4A373]"><i class="fab fa-whatsapp"></i></a><a href="#" class="hover:text-[#D4A373]"><i class="fab fa-viber"></i></a><a href="#" class="hover:text-[#D4A373]"><i class="fas fa-message"></i></a></div></div>
+    <div><h4 class="text-white font-semibold mb-3">Соцсети</h4><div class="flex gap-4 text-2xl"><a href="#" target="_blank"><i class="fab fa-instagram"></i></a><a href="#" target="_blank"><i class="fab fa-tiktok"></i></a><a href="#" target="_blank"><i class="fab fa-vk"></i></a><a href="#" target="_blank"><i class="fab fa-telegram"></i></a></div></div>
+  </div>
+  <div class="text-center text-sm opacity-50 mt-12 border-t border-white/10 pt-6">© NeuroVid, <span id="currentYear"></span></div>
+</footer>
+
+<!-- ==================== МОДАЛКИ ==================== -->
+<!-- Контактная модалка (мессенджеры) -->
+<div id="contactModal" class="modal">
+  <div class="bg-[#1A1A2E] p-8 rounded-3xl max-w-sm w-full text-white">
+    <h3 class="text-2xl font-bold mb-6">Выберите мессенджер</h3>
+    <div class="grid grid-cols-2 gap-4">
+      <a href="#" class="bg-[#2AABEE] p-4 rounded-xl text-center"><i class="fab fa-telegram text-2xl"></i><span class="block mt-1">Telegram</span></a>
+      <a href="#" class="bg-[#25D366] p-4 rounded-xl text-center"><i class="fab fa-whatsapp text-2xl"></i><span class="block mt-1">WhatsApp</span></a>
+      <a href="#" class="bg-[#7360F2] p-4 rounded-xl text-center"><i class="fab fa-viber text-2xl"></i><span class="block mt-1">Viber</span></a>
+      <a href="#" class="bg-[#6C4DFF] p-4 rounded-xl text-center"><i class="fas fa-message text-2xl"></i><span class="block mt-1">Max</span></a>
+    </div>
+    <button class="mt-6 w-full py-2 border border-white/20 rounded-full closeModal">Закрыть</button>
+  </div>
+</div>
+
+<!-- Модалка загрузки фото (семья) -->
+<div id="uploadModal" class="modal">
+  <div class="bg-white p-8 rounded-3xl max-w-md w-full text-gray-900">
+    <h3 class="text-2xl font-bold mb-4">Оценить сложность</h3>
+    <input type="file" accept="image/*" class="mb-4 w-full" id="photoUpload">
+    <input type="text" placeholder="Telegram / WhatsApp" class="w-full p-3 border rounded-xl mb-4" id="contactField">
+    <button id="submitUpload" class="w-full bg-[#D4A373] py-3 rounded-xl font-bold">Отправить</button>
+    <button class="w-full mt-3 text-gray-500 closeModal">Отмена</button>
+  </div>
+</div>
+
+<!-- Лид-форма бизнес -->
+<div id="businessModal" class="modal">
+  <div class="bg-white p-8 rounded-3xl max-w-md w-full text-gray-900">
+    <h3 class="text-2xl font-bold mb-4">Презентация для руководства</h3>
+    <input type="text" placeholder="Имя" class="w-full p-3 border rounded-xl mb-3" id="bizName">
+    <input type="text" placeholder="Компания" class="w-full p-3 border rounded-xl mb-3" id="bizCompany">
+    <input type="text" placeholder="Telegram" class="w-full p-3 border rounded-xl mb-4" id="bizTelegram">
+    <button id="submitBusiness" class="w-full bg-[#457B9D] text-white py-3 rounded-xl font-bold">Получить</button>
+    <button class="w-full mt-3 text-gray-500 closeModal">Отмена</button>
+  </div>
+</div>
+
+<!-- Кнопка "Орбита" -->
+<div class="orbit-button" id="orbitBtn">
+  <i class="fas fa-chevron-up"></i>
+  <div class="orbit-menu">
+    <div class="orbit-menu-item" data-jump="family" style="background:#D4A373;"><i class="fas fa-heart"></i></div>
+    <div class="orbit-menu-item" data-jump="business" style="background:#457B9D;"><i class="fas fa-briefcase"></i></div>
+    <div class="orbit-menu-item" data-jump="creators" style="background:#E63946;"><i class="fas fa-bolt"></i></div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    "use strict";
+
+    // ---------- КОНСТАНТЫ (без магических чисел) ----------
+    const SCROLL_THRESHOLD = 600;
+    const THROTTLE_DELAY = 100;
+    const SECTIONS = ['family', 'business', 'creators'];
+    const COLOR_MAP = {
+      family: '#D4A373',
+      business: '#457B9D',
+      creators: '#E63946',
+      default: '#2d2d3a'
+    };
+
+    // ---------- УТИЛИТЫ ----------
+    const throttle = (fn, delay) => {
+      let last = 0;
+      return function(...args) {
+        const now = Date.now();
+        if (now - last > delay) {
+          last = now;
+          fn.apply(this, args);
+        }
+      };
+    };
+
+    // Ранний возврат для валидации
+    const isEmpty = (val) => !val || val.trim() === '';
+
+    // JSDoc типизация
+    /** @type {HTMLElement} */
+    const orbit = document.getElementById('orbitBtn');
+    const header = document.getElementById('mainHeader');
+    const yearSpan = document.getElementById('currentYear');
+    if (yearSpan) yearSpan.textContent = new Date().getFullYear();
+
+    // ---------- МОДАЛКИ ----------
+    const modals = document.querySelectorAll('.modal');
+    const closeModal = () => modals.forEach(m => m.classList.remove('active'));
+    document.querySelectorAll('.closeModal').forEach(btn => btn.addEventListener('click', closeModal));
+    
+    document.getElementById('contactBtn').addEventListener('click', () => {
+      document.getElementById('contactModal').classList.add('active');
+    });
+    document.getElementById('familyCta').addEventListener('click', () => {
+      document.getElementById('uploadModal').classList.add('active');
+    });
+    document.getElementById('businessPresentationBtn').addEventListener('click', () => {
+      document.getElementById('businessModal').classList.add('active');
+    });
+
+    // Валидация форм + alert 2026
+    document.getElementById('submitUpload')?.addEventListener('click', (e) => {
+      const file = document.getElementById('photoUpload').files[0];
+      const contact = document.getElementById('contactField').value;
+      if (!file || isEmpty(contact)) {
+        alert('Пожалуйста, выберите фото и укажите контакт.');
+        return;
+      }
+      alert('Спасибо! Свяжемся в 2026 году, оценим сложность.');
+      closeModal();
+    });
+    document.getElementById('submitBusiness')?.addEventListener('click', () => {
+      const name = document.getElementById('bizName').value;
+      const company = document.getElementById('bizCompany').value;
+      const tg = document.getElementById('bizTelegram').value;
+      if (isEmpty(name) || isEmpty(company) || isEmpty(tg)) {
+        alert('Все поля обязательны.');
+        return;
+      }
+      alert('Презентация отправлена! Ждите звонка в 2026.');
+      closeModal();
+    });
+    document.getElementById('catalogDownload')?.addEventListener('click', () => {
+      alert('Каталог стилей отправлен вам в Telegram (демо).');
+    });
+
+    // Кнопки скролла из hero
+    document.querySelectorAll('[data-scroll-to]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.scrollTo;
+        gsap.to(window, { duration: 1, scrollTo: `#${id}`, ease: 'power3.inOut' });
+      });
+    });
+
+    // ---------- СЛАЙДЕР ДО/ПОСЛЕ ----------
+    const range = document.getElementById('comparisonRange');
+    const afterDiv = document.querySelector('.comparison-after');
+    if (range && afterDiv) {
+      const updateSlider = () => {
+        const val = range.value;
+        afterDiv.style.clipPath = `inset(0 ${100 - val}% 0 0)`;
+        document.querySelector('.slider-handle').style.left = val + '%';
+      };
+      range.addEventListener('input', updateSlider);
+      updateSlider();
+    }
+
+    // ---------- GSAP: АНИМАЦИИ ПОЯВЛЕНИЯ ----------
+    gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+    const fadeElements = gsap.utils.toArray('.fade-up');
+    fadeElements.forEach(el => {
+      gsap.fromTo(el, { y: 20, opacity: 0 }, {
+        y: 0, opacity: 1, duration: 0.8, scrollTrigger: { trigger: el, start: 'top 85%', toggleActions: 'play none none none' }
+      });
+    });
+    // дополнительно анимируем заголовки секций
+    gsap.utils.toArray('section h2').forEach(h => {
+      gsap.from(h, { y: 15, opacity: 0, duration: 0.7, scrollTrigger: { trigger: h, start: 'top 90%' } });
+    });
+
+    // ---------- ОРБИТА: ПОЯВЛЕНИЕ, ЦВЕТ, МИНИ-МЕНЮ ----------
+    const handleOrbitVisibility = () => {
+      const scrolled = window.scrollY > SCROLL_THRESHOLD;
+      orbit.classList.toggle('visible', scrolled);
+      
+      if (!scrolled) return;
+      
+      // Определение активной секции (ранний возврат по приоритету)
+      let activeColor = COLOR_MAP.default;
+      for (const sec of SECTIONS) {
+        const el = document.getElementById(sec);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= 200 && rect.bottom >= 200) {
+          activeColor = COLOR_MAP[sec];
+          break;
+        }
+      }
+      orbit.style.backgroundColor = activeColor;
+    };
+
+    window.addEventListener('scroll', throttle(handleOrbitVisibility, THROTTLE_DELAY));
+    handleOrbitVisibility(); // init
+
+    // Клик по орбите -> скролл наверх
+    orbit.addEventListener('click', (e) => {
+      if (e.target.closest('.orbit-menu-item')) return; // не мешаем мини-меню
+      gsap.to(window, { duration: 1, scrollTo: 0, ease: 'power3.inOut' });
+    });
+
+    // Мини-меню прыжки
+    document.querySelectorAll('.orbit-menu-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const jump = item.dataset.jump;
+        if (jump) gsap.to(window, { duration: 1, scrollTo: `#${jump}`, ease: 'power3.inOut' });
+      });
+    });
+
+    // header тень при скролле
+    window.addEventListener('scroll', throttle(() => {
+      header.classList.toggle('scrolled', window.scrollY > 20);
+    }, 50));
+
+    // На мобильных скрываем ховер-меню (не мешает)
+    // a11y aria-label
+    document.querySelectorAll('button, a').forEach(el => { if(!el.getAttribute('aria-label')) el.setAttribute('aria-label', el.textContent.trim() || 'кнопка'); });
+
+    // Закрытие модалок по клику вне контента
+    modals.forEach(m => m.addEventListener('click', (e) => { if (e.target === m) closeModal(); }));
+  })();
+</script>
+<!-- небольшая доработка: fade-up классы на карточки -->
+<style>.fade-up { opacity: 1; transform: none; } /* убираем начальное скрытие, GSAP сам сделает */</style>
+</body>
+</html>
